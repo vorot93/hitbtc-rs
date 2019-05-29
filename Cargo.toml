@@ -1,0 +1,19 @@
+[package]
+name = "hitbtc"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+authors = ["Artem Vorotnikov <artem@vorotnikov.me>"]
+description = "API for working with HitBTC cryptocurrency exchange"
+keywords = ["cryptocurrency", "trading", "hitbtc"]
+edition = "2018"
+
+[dependencies]
+bigdecimal = { version = "*", features = ["serde"] }
+chrono = { version = "*", features = ["serde"] }
+derivative = "*"
+failure = "*"
+futures-preview = { version = "0.3.0-alpha.16", features = ["compat"] }
+http = "*"
+reqwest = "*"
+serde = "*"
+uuid = { version = "*", features = ["serde"] }
