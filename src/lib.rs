@@ -1,17 +1,22 @@
 #![feature(async_await)]
 
 use {
+    bigdecimal::BigDecimal,
     chrono::prelude::*,
     derivative::Derivative,
     failure::Fallible,
     futures::compat::*,
     http::Method,
+    maplit::hashmap,
     reqwest::r#async::Client as HttpClient,
     serde::{Deserialize, Serialize},
-    std::{collections::HashMap, fmt::Display, ops::Deref},
+    serde_json,
+    std::{collections::HashMap, fmt::Display, iter::empty, ops::Deref},
+    uuid::Uuid,
 };
 
 pub mod models;
+use models::*;
 
 const BASE: &str = "https://api.hitbtc.com";
 
@@ -130,11 +135,30 @@ impl AuthenticatedClient {
             url.push_str(&format!("/{}", id))
         }
 
-        let query_params = std::iter::empty()
+        let query_params = empty()
             .chain(from.map(|v| ("from", v.to_rfc3339())))
             .chain(till.map(|v| ("till", v.to_rfc3339())))
             .chain(limit.map(|v| ("limit", v.to_string())))
             .collect::<HashMap<_, _>>();
+
+        Ok(self.request(method, url, query_params).await?)
+    }
+
+    pub async fn transfer_account_money(
+        &self,
+        currency: String,
+        amount: BigDecimal,
+        direction: AccountMoneyTransferDirection,
+    ) -> Fallible<Uuid> {
+        let method = Method::POST;
+
+        let url = "/api/v2/account/transfer";
+
+        let query_params = hashmap! {
+            "currency" => currency,
+            "amount" => amount.to_string(),
+            "type" => serde_json::to_string(&direction)?,
+        };
 
         Ok(self.request(method, url, query_params).await?)
     }

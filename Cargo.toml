@@ -14,6 +14,8 @@ derivative = "*"
 failure = "*"
 futures-preview = { version = "0.3.0-alpha.16", features = ["compat"] }
 http = "*"
+maplit = "*"
 reqwest = "*"
 serde = "*"
+serde_json = "*"
 uuid = { version = "*", features = ["serde"] }

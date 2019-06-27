@@ -1,4 +1,9 @@
-use {bigdecimal::BigDecimal, chrono::prelude::*, serde::Deserialize, uuid::Uuid};
+use {
+    bigdecimal::BigDecimal,
+    chrono::prelude::*,
+    serde::{Deserialize, Serialize},
+    uuid::Uuid,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,4 +64,11 @@ pub struct Transaction {
     pub transaction_type: TransactionType,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AccountMoneyTransferDirection {
+    BankToExchange,
+    ExchangeToBank,
 }
