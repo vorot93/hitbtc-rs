@@ -10,12 +10,14 @@ edition = "2018"
 [dependencies]
 bigdecimal = { version = "*", features = ["serde"] }
 chrono = { version = "*", features = ["serde"] }
-derivative = "*"
 failure = "*"
-futures-preview = { version = "0.3.0-alpha.16", features = ["compat"] }
+futures-preview = "0.3.0-alpha"
+headers = "*"
 http = "*"
+hyper-client-util = { git = "https://github.com/vorot93/hyper-client-util" }
+log = "*"
 maplit = "*"
-reqwest = "*"
-serde = "*"
+serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+serde_urlencoded = "0.6"
 uuid = { version = "*", features = ["serde"] }

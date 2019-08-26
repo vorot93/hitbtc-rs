@@ -1,14 +1,11 @@
-#![feature(async_await)]
-
 use {
     bigdecimal::BigDecimal,
     chrono::prelude::*,
-    derivative::Derivative,
     failure::Fallible,
-    futures::compat::*,
     http::Method,
+    hyper_client_util::*,
+    log::*,
     maplit::hashmap,
-    reqwest::r#async::Client as HttpClient,
     serde::{Deserialize, Serialize},
     serde_json,
     std::{collections::HashMap, fmt::Display, iter::empty, ops::Deref},
@@ -20,44 +17,67 @@ use models::*;
 
 const BASE: &str = "https://api.hitbtc.com";
 
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Clone, Debug)]
+struct HttpClientWrapper(HttpClient);
+
+impl HttpClientWrapper {
+    fn with_base_url<P: Display>(&self, path: P) -> String {
+        format!("{}{}", BASE, path.to_string())
+    }
+
+    async fn request<T: for<'de> Deserialize<'de>, U: Display, Q: Serialize>(
+        &self,
+        signature: Option<headers::Authorization<headers::authorization::Basic>>,
+        method: Method,
+        path: U,
+        query_params: Q,
+    ) -> Fallible<T> {
+        let mut req = self
+            .0
+            .build_request()
+            .method(method)
+            .uri(&self.with_base_url(format!(
+                "{}?{}",
+                path.to_string(),
+                serde_urlencoded::to_string(query_params)?
+            )))?;
+
+        debug!("Sending request: {:?}", req);
+
+        if let Some(signature) = signature {
+            req = req.header(signature);
+        }
+
+        req.recv_json().await
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Client {
-    #[derivative(Debug = "ignore")]
-    http_client: HttpClient,
+    http_client: HttpClientWrapper,
 }
 
 impl Client {
-    pub fn new() -> Self {
+    pub fn new(http_client: HttpClient) -> Self {
         Self {
-            http_client: HttpClient::new(),
+            http_client: HttpClientWrapper(http_client),
         }
     }
 
-    async fn request<'a, T, Q, U>(&'a self, method: Method, url: U, query_params: Q) -> Fallible<T>
-    where
-        T: for<'de> Deserialize<'de>,
-        Q: Serialize,
-        U: Display,
-    {
-        Ok(self
-            .http_client
-            .clone()
-            .request(method, &format!("{}{}", BASE, &url.to_string()))
-            .query(&query_params)
-            .send()
-            .compat()
-            .await?
-            .json()
-            .compat()
-            .await?)
+    async fn request<T: for<'de> Deserialize<'de>, U: Display, Q: Serialize>(
+        &self,
+        method: Method,
+        path: U,
+        query_params: Q,
+    ) -> Fallible<T> {
+        self.http_client
+            .request(None, method, path, query_params)
+            .await
     }
 
     pub async fn get_currencies(&self) -> Fallible<Vec<models::CurrencyInfo>> {
-        let method = Method::GET;
-        let url = "/api/2/public/currency";
-
-        Ok(self.request(method, url, ()).await?)
+        self.request(Method::GET, "/api/v2/public/currency", ())
+            .await
     }
 
     pub fn login(self, api_key: String, api_secret: String) -> AuthenticatedClient {
@@ -77,8 +97,7 @@ impl Deref for AuthenticatedClient {
     }
 }
 
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Clone, Debug)]
 pub struct AuthenticatedClient {
     public: Client,
     api_key: String,
@@ -90,24 +109,24 @@ impl AuthenticatedClient {
         self.public
     }
 
-    async fn request<'a, T, Q, U>(&'a self, method: Method, url: U, query_params: Q) -> Fallible<T>
-    where
-        T: for<'de> Deserialize<'de>,
-        Q: Serialize,
-        U: Display,
-    {
-        Ok(self
+    async fn request<T: for<'de> Deserialize<'de>, U: Display, Q: Serialize>(
+        &self,
+        method: Method,
+        path: U,
+        query_params: Q,
+    ) -> Fallible<T> {
+        self.public
             .http_client
-            .clone()
-            .request(method, &format!("{}{}", BASE, &url.to_string()))
-            .basic_auth(&self.api_key, Some(&self.api_secret))
-            .query(&query_params)
-            .send()
-            .compat()
-            .await?
-            .json()
-            .compat()
-            .await?)
+            .request(
+                Some(headers::Authorization::basic(
+                    &self.api_key,
+                    &self.api_secret,
+                )),
+                method,
+                path,
+                query_params,
+            )
+            .await
     }
 
     pub async fn get_deposit_address(
