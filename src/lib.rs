@@ -3,9 +3,9 @@ use {
     chrono::prelude::*,
     failure::Fallible,
     http::Method,
-    hyper_client_util::*,
     log::*,
     maplit::hashmap,
+    reqwest_ext::RequestBuilderExt,
     serde::{Deserialize, Serialize},
     serde_json,
     std::{collections::HashMap, fmt::Display, iter::empty, ops::Deref},
@@ -18,7 +18,13 @@ use models::*;
 const BASE: &str = "https://api.hitbtc.com";
 
 #[derive(Clone, Debug)]
-struct HttpClientWrapper(HttpClient);
+struct HttpClientWrapper(reqwest::Client);
+
+impl Default for HttpClientWrapper {
+    fn default() -> Self {
+        Self(reqwest::ClientBuilder::new().build().unwrap())
+    }
+}
 
 impl HttpClientWrapper {
     fn with_base_url<P: Display>(&self, path: P) -> String {
@@ -32,36 +38,31 @@ impl HttpClientWrapper {
         path: U,
         query_params: Q,
     ) -> Fallible<T> {
-        let mut req = self
-            .0
-            .build_request()
-            .method(method)
-            .uri(&self.with_base_url(format!(
-                "{}?{}",
-                path.to_string(),
-                serde_urlencoded::to_string(query_params)?
-            )))?;
+        let uri = self.with_base_url(format!(
+            "{}?{}",
+            path.to_string(),
+            serde_urlencoded::to_string(query_params)?
+        ));
+        let mut req = self.0.request(method, &uri);
 
         debug!("Sending request: {:?}", req);
 
         if let Some(signature) = signature {
-            req = req.header(signature);
+            req = req.typed_header(signature);
         }
 
-        req.recv_json().await
+        Ok(req.send().await?.json().await?)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Client {
     http_client: HttpClientWrapper,
 }
 
 impl Client {
-    pub fn new(http_client: HttpClient) -> Self {
-        Self {
-            http_client: HttpClientWrapper(http_client),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     async fn request<T: for<'de> Deserialize<'de>, U: Display, Q: Serialize>(
